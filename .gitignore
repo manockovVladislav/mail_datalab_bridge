@@ -17,7 +17,6 @@ env/
 build/
 dist/
 *.egg-info/
-tests/*
 
 # Local configuration and secrets
 .env
@@ -29,6 +28,7 @@ tests/*
 mail_agent.log*
 state.json
 state.tmp
+state.json.tmp
 state.corrupt-*
 
 # IDE and operating-system files
