@@ -81,8 +81,43 @@ class EmailConfigTests(unittest.TestCase):
             self.assertEqual(calls, ["Первый вопрос?\n\nВторой вопрос?"])
             self.assertEqual(len(responses), 1)
             self.assertEqual(responses[0][0], "technical@example.com")
-            self.assertEqual(pop3.deleted, [])
+            self.assertEqual(pop3.deleted, [1])
             self.assertEqual(handler.state[REQUEST_ID]["status"], "completed")
+
+    def test_request_is_not_deleted_when_json_response_fails(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            payload = {
+                "protocol": 1,
+                "type": "request",
+                "request_id": REQUEST_ID,
+                "question": "Вопрос?",
+            }
+            message = EmailMessage()
+            message["From"] = "technical@example.com"
+            message["To"] = "relay@example.com"
+            message["Subject"] = f"json_handlers request {REQUEST_ID}"
+            message.set_content(json.dumps(payload, ensure_ascii=False))
+            pop3 = FakePop3(message.as_bytes())
+
+            handler = EmailConfig(
+                "relay@example.com",
+                "login",
+                "password",
+                state_file=Path(temp_dir) / "state.json",
+            )
+
+            def fail_to_send(*args):
+                raise RuntimeError("Ошибка SMTP")
+
+            handler._send_json_response = fail_to_send
+
+            with patch.object(mails_handler.poplib, "POP3_SSL", return_value=pop3):
+                with self.assertLogs(mails_handler.logger, level="ERROR"):
+                    handler.process_incoming_emails(lambda question: "Ответ")
+                    handler.process_incoming_emails(lambda question: "Ответ")
+
+            self.assertEqual(pop3.deleted, [])
+            self.assertEqual(handler.state[REQUEST_ID]["status"], "sending")
 
     def test_saved_response_is_resumed_before_reading_pop3(self):
         with tempfile.TemporaryDirectory() as temp_dir:

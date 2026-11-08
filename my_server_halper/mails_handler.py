@@ -137,7 +137,11 @@ class EmailConfig:
 
             return_to = parseaddr(str(message.get("From", "")))[1]
             if return_to:
-                yield request_id, question.strip(), return_to
+                # === ЗАКРЫТЫЙ КОНТУР: ДОБАВИТЬ (1/2) ===
+                # Номер POP3-письма нужен ниже для DELE только после
+                # успешной отправки JSON-ответа.
+                yield message_number, request_id, question.strip(), return_to
+                # === ЗАКРЫТЫЙ КОНТУР: КОНЕЦ ДОБАВЛЕНИЯ (1/2) ===
 
     @staticmethod
     def _call_answer(answer_function, question, request_id):
@@ -210,8 +214,29 @@ class EmailConfig:
             pop_connection.user(self.USERNAME)
             pop_connection.pass_(self.PASSWORD)
 
-            for request_id, question, return_to in self._read_requests(pop_connection):
-                if request_id in self.state:
+            # === ЗАКРЫТЫЙ КОНТУР: ДОБАВИТЬ (2/2) ===
+            for (
+                message_number,
+                request_id,
+                question,
+                return_to,
+            ) in self._read_requests(pop_connection):
+                record = self.state.get(request_id)
+
+                # completed записывается только после успешной
+                # _send_json_response(). DELE помечает исходный JSON-запрос
+                # на удаление; POP3 фиксирует его при quit() ниже.
+                if record is not None and record.get("status") == "completed":
+                    pop_connection.dele(message_number)
+                    logger.info(
+                        "Обработанное служебное письмо %s "
+                        "помечено для переноса в Удалённые",
+                        request_id,
+                    )
+                    continue
+                # === ЗАКРЫТЫЙ КОНТУР: КОНЕЦ ДОБАВЛЕНИЯ (2/2) ===
+
+                if record is not None:
                     continue
                 self.state[request_id] = {
                     "status": "received",
@@ -227,4 +252,3 @@ class EmailConfig:
                     logger.exception("Ошибка закрытия POP3")
 
         self._process_pending(answer_function)
-        # POP3 DELE не вызывается: удаляет служебные письма только ARM.
