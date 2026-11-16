@@ -267,6 +267,8 @@ class MailProcessor:
                 response.get("entry_id"), response.get("store_id")
             )
         self.outlook.delete_sent_by_subject(record["relay_subject"])
+        self.outlook.delete_relay_inbox_by_subject(record["relay_subject"])
+        record["relay_inbox_cleaned"] = True
 
         record["status"] = "completed"
         record.pop("answer", None)
@@ -287,6 +289,12 @@ class MailProcessor:
                 self._recover_replying(request_id, record)
             elif status in {"replied", "cleaning"}:
                 self._cleanup(request_id, record)
+            elif status == "completed" and not record.get("relay_inbox_cleaned"):
+                # Записи, завершённые до добавления очистки
+                # личного relay-ящика, доочищаются после обновления.
+                self.outlook.delete_relay_inbox_by_subject(record["relay_subject"])
+                record["relay_inbox_cleaned"] = True
+                self._save()
 
     def cycle(self):
         # Сохранённые операции продолжаются даже до нового чтения входящих.

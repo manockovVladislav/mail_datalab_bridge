@@ -7,6 +7,9 @@ TECH_MAIL_SMTP = "technical@company.ru"
 
 # Ящик-посредник, доступный из VARM по POP3/SMTP.
 RELAY_MAIL_SMTP = "relay@company.ru"
+# Точное имя корня этого же ящика в дереве Outlook на ARM.
+# Из его «Входящих» ARM удаляет обработанный JSON-запрос.
+RELAY_MAIL_FOLDER = "PERSONAL MAIL"
 
 # Обычное обращение пользователя обрабатывается, если эта фраза есть в теме.
 REQUEST_SUBJECT_PHRASE = "вопрос помощнику"

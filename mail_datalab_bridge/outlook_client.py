@@ -14,14 +14,28 @@ SMTP_ADDRESS = "http://schemas.microsoft.com/mapi/proptag/0x5D01001F"
 
 
 class OutlookClient:
-    def __init__(self, folder_name, sender_smtp, inbox_name, sent_name):
+    def __init__(
+        self,
+        folder_name,
+        relay_folder_name,
+        sender_smtp,
+        inbox_name,
+        sent_name,
+    ):
         self.app = win32com.client.Dispatch("Outlook.Application")
         self.ns = self.app.GetNamespace("MAPI")
         self.root = self.ns.Folders.Item(folder_name)
         self.inbox = self.root.Folders.Item(inbox_name)
         self.sent = self.root.Folders.Item(sent_name)
+        self.relay_root = self.ns.Folders.Item(relay_folder_name)
+        self.relay_inbox = self.relay_root.Folders.Item(inbox_name)
         self.sender_smtp = sender_smtp
-        logging.info("Outlook подключён к ящику %s", folder_name)
+        logging.info(
+            "Outlook подключён: технический ящик %s, "
+            "промежуточный ящик %s",
+            folder_name,
+            relay_folder_name,
+        )
 
     @staticmethod
     def sender_email(mail):
@@ -171,3 +185,37 @@ class OutlookClient:
                 logging.debug("Письмо уже удалено из Отправленных", exc_info=True)
         if entry_ids:
             logging.info("Служебный запрос перемещён из Отправленных в Удалённые")
+
+    def delete_relay_inbox_by_subject(self, subject):
+        """Перемещает JSON-запрос из личного relay-ящика ARM."""
+        items = self.relay_inbox.Items
+        entry_ids = []
+        for index in range(1, items.Count + 1):
+            try:
+                mail = items.Item(index)
+                if mail.Class == MAIL_ITEM_CLASS and str(mail.Subject or "") == subject:
+                    entry_ids.append((str(mail.EntryID), str(mail.Parent.StoreID)))
+            except Exception:
+                logging.debug(
+                    "Ошибка просмотра Входящих relay-ящика",
+                    exc_info=True,
+                )
+
+        for entry_id, store_id in entry_ids:
+            try:
+                mail = self.ns.GetItemFromID(entry_id, store_id)
+                if str(mail.Parent.EntryID) == str(self.relay_inbox.EntryID):
+                    # Delete() перемещает письмо в «Удалённые»
+                    # того же личного Outlook-ящика.
+                    mail.Delete()
+            except Exception:
+                logging.debug(
+                    "Письмо уже удалено из relay-ящика",
+                    exc_info=True,
+                )
+        if entry_ids:
+            logging.info(
+                "JSON-запрос %s перемещён из Входящих "
+                "личного relay-ящика в Удалённые",
+                subject,
+            )

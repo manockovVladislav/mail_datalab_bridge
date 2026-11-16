@@ -9,6 +9,7 @@ def validate_config():
     required = {
         "TECH_MAIL_FOLDER": config.TECH_MAIL_FOLDER,
         "TECH_MAIL_SMTP": config.TECH_MAIL_SMTP,
+        "RELAY_MAIL_FOLDER": config.RELAY_MAIL_FOLDER,
         "RELAY_MAIL_SMTP": config.RELAY_MAIL_SMTP,
         "REQUEST_SUBJECT_PHRASE": config.REQUEST_SUBJECT_PHRASE,
         "BRIDGE_SUBJECT": config.BRIDGE_SUBJECT,
@@ -47,6 +48,7 @@ def main():
 
     outlook = OutlookClient(
         folder_name=config.TECH_MAIL_FOLDER,
+        relay_folder_name=config.RELAY_MAIL_FOLDER,
         sender_smtp=config.TECH_MAIL_SMTP,
         inbox_name=config.INBOX_FOLDER,
         sent_name=config.SENT_FOLDER,

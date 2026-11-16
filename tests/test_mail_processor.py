@@ -24,6 +24,7 @@ class FakeOutlook:
         self.sent_markers = set()
         self.deleted = []
         self.deleted_sent = []
+        self.deleted_relay_inbox = []
 
     def incoming(self, limit):
         return self.messages[:limit]
@@ -46,6 +47,9 @@ class FakeOutlook:
 
     def delete_sent_by_subject(self, subject):
         self.deleted_sent.append(subject)
+
+    def delete_relay_inbox_by_subject(self, subject):
+        self.deleted_relay_inbox.append(subject)
 
 
 class MailProcessorTests(unittest.TestCase):
@@ -130,6 +134,36 @@ class MailProcessorTests(unittest.TestCase):
         self.assertEqual(
             outlook.deleted_sent, [f"json_handlers request {REQUEST_ID}"]
         )
+        self.assertEqual(
+            outlook.deleted_relay_inbox,
+            [f"json_handlers request {REQUEST_ID}"],
+        )
+        self.assertTrue(processor.state[REQUEST_ID]["relay_inbox_cleaned"])
+
+    def test_completed_old_record_is_cleaned_from_relay_inbox_once(self):
+        relay_subject = f"json_handlers request {REQUEST_ID}"
+        self.state_file.write_text(
+            json.dumps(
+                {
+                    REQUEST_ID: {
+                        "status": "completed",
+                        "email": "user@example.com",
+                        "subject": "Вопрос помощнику",
+                        "question": "Вопрос",
+                        "relay_subject": relay_subject,
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        outlook = FakeOutlook()
+        processor = MailProcessor(outlook, self.cfg)
+
+        processor.process_pending()
+        processor.process_pending()
+
+        self.assertEqual(outlook.deleted_relay_inbox, [relay_subject])
+        self.assertTrue(processor.state[REQUEST_ID]["relay_inbox_cleaned"])
 
     def test_restart_recovers_forwarding_from_sent_folder(self):
         relay_subject = f"json_handlers request {REQUEST_ID}"
